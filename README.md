@@ -1,6 +1,8 @@
 # BabySteps 🍼
 
 **Privacy-First Newborn Routine & Health Tracker**
+**Latest Version: 1.0.2**
+
 
 BabySteps is a secure, offline-first application designed to simplify tracking newborn routines while providing meaningful insights through high-performance data visualization. Built with privacy at its core, it ensures that your baby's most sensitive data stays under your control.
 

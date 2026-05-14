@@ -1,5 +1,14 @@
 # BabySteps Release Notes
 
+## Version 1.0.2
+**Date: May 14, 2026**
+
+### 🛠️ Maintenance & Improvements
+*   Updated project version to 1.0.2+4.
+*   Updated documentation and project metadata.
+*   General stability improvements and dependency alignment.
+
+
 ## Version 1.0.1
 **Date: May 14, 2026**
 

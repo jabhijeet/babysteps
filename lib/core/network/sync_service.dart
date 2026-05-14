@@ -1,0 +1,248 @@
+import 'dart:convert';
+import 'dart:developer';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../config/environment.dart';
+
+class SyncService with ChangeNotifier {
+  SyncService({GoogleSignIn? googleSignIn}) : _testGoogleSignIn = googleSignIn;
+
+  final GoogleSignIn? _testGoogleSignIn;
+  drive.DriveApi? _driveApi;
+  GoogleSignInAccount? _currentUser;
+  bool _isInitialized = false;
+
+  static const String _clientIdKey = 'custom_google_client_id';
+  
+  static String get defaultClientId {
+    // Use environment-specific client IDs configured via --dart-define
+    if (kIsWeb) {
+      final id = Environment.googleOAuthWebClientId;
+      if (id.isEmpty) {
+        log('Warning: GOOGLE_OAUTH_WEB_CLIENT_ID not configured. Google Sign-In will fail.');
+      }
+      return id;
+    }
+    if (Platform.isIOS) {
+      final id = Environment.googleOAuthIosClientId;
+      if (id.isEmpty) {
+        log('Warning: GOOGLE_OAUTH_IOS_CLIENT_ID not configured. Google Sign-In will fail.');
+      }
+      return id;
+    }
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      final id = Environment.googleOAuthDesktopClientId;
+      if (id.isEmpty) {
+        log('Warning: GOOGLE_OAUTH_DESKTOP_CLIENT_ID not configured. Google Sign-In will fail.');
+      }
+      return id;
+    }
+    // Android or other platforms
+    final id = Environment.googleOAuthAndroidClientId;
+    if (id.isEmpty) {
+      log('Warning: GOOGLE_OAUTH_ANDROID_CLIENT_ID not configured. Google Sign-In will fail.');
+    }
+    return id;
+  }
+
+  GoogleSignInAccount? get currentUser => _currentUser;
+
+  final List<String> _scopes = [
+    drive.DriveApi.driveFileScope,
+  ];
+
+  Future<GoogleSignIn> _getGoogleSignIn() async {
+    if (_testGoogleSignIn != null) return _testGoogleSignIn;
+    
+    final gsi = GoogleSignIn.instance;
+    if (!_isInitialized) {
+      final prefs = await SharedPreferences.getInstance();
+      final clientId = prefs.getString(_clientIdKey) ?? defaultClientId;
+
+      final isAndroid = !kIsWeb && Platform.isAndroid;
+
+      // In google_sign_in 7.0+, initialize must be called with parameters.
+      // Scopes are now requested via authorizeScopes on the account.
+      await gsi.initialize(
+        clientId: isAndroid ? null : clientId,
+        serverClientId: isAndroid ? clientId : null,
+      );
+      _isInitialized = true;
+    }
+    
+    return gsi;
+  }
+
+  Future<void> updateClientId(String newClientId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = newClientId.trim().isEmpty ? defaultClientId : newClientId.trim();
+    await prefs.setString(_clientIdKey, id);
+    
+    // Reset state to force re-initialization
+    _isInitialized = false;
+    _driveApi = null;
+    _currentUser = null;
+    notifyListeners();
+  }
+  
+  Future<String> getCurrentClientId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_clientIdKey) ?? defaultClientId;
+  }
+
+  Future<GoogleSignInAccount?> signIn() async {
+    try {
+      final googleSignIn = await _getGoogleSignIn();
+      final account = await googleSignIn.authenticate();
+
+      final authz = await account.authorizationClient.authorizeScopes(_scopes);
+      final client = authz.authClient(scopes: _scopes);
+      _driveApi = drive.DriveApi(client);
+      _currentUser = account;
+      log('User signed in: ${account.email}');
+      
+      notifyListeners();
+      return account;
+    } catch (e) {
+      log('Error during sign in: $e');
+      _currentUser = null;
+      _driveApi = null;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<void> signOut() async {
+    final googleSignIn = await _getGoogleSignIn();
+    await googleSignIn.signOut();
+    _driveApi = null;
+    _currentUser = null;
+    notifyListeners();
+  }
+
+  Future<String> _getOrCreateBabyFolder(int babyId) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+
+    final folderName = 'BabySteps_Sync_Baby_$babyId';
+    final list = await _driveApi!.files.list(
+      q: "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      spaces: 'drive',
+    );
+
+    if (list.files != null && list.files!.isNotEmpty) {
+      return list.files!.first.id!;
+    }
+
+    final folder = drive.File()
+      ..name = folderName
+      ..mimeType = 'application/vnd.google-apps.folder';
+
+    final created = await _driveApi!.files.create(folder);
+    return created.id!;
+  }
+
+  Future<void> shareWithPartner(int babyId, String email) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+    final folderId = await _getOrCreateBabyFolder(babyId);
+
+    final permission = drive.Permission()
+      ..type = 'user'
+      ..role = 'writer'
+      ..emailAddress = email;
+
+    await _driveApi!.permissions.create(
+      permission,
+      folderId,
+      sendNotificationEmail: true,
+    );
+  }
+
+  Future<void> backupDatabase(int babyId, String dbContent) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+    final folderId = await _getOrCreateBabyFolder(babyId);
+
+    final fileName = 'babysteps_backup_$babyId.json';
+    final media = drive.Media(
+      Stream.value(utf8.encode(dbContent)),
+      utf8.encode(dbContent).length,
+    );
+
+    final list = await _driveApi!.files.list(
+      q: "name = '$fileName' and '$folderId' in parents and trashed = false",
+      spaces: 'drive',
+    );
+
+    if (list.files != null && list.files!.isNotEmpty) {
+      final fileId = list.files!.first.id!;
+      await _driveApi!.files.update(
+        drive.File(),
+        fileId,
+        uploadMedia: media,
+      );
+    } else {
+      final file = drive.File()
+        ..name = fileName
+        ..parents = [folderId];
+      await _driveApi!.files.create(
+        file,
+        uploadMedia: media,
+      );
+    }
+  }
+
+  Future<String?> restoreDatabase(int babyId) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+    final folderId = await _getOrCreateBabyFolder(babyId);
+    final fileName = 'babysteps_backup_$babyId.json';
+
+    final list = await _driveApi!.files.list(
+      q: "name = '$fileName' and '$folderId' in parents and trashed = false",
+      spaces: 'drive',
+    );
+
+    if (list.files != null && list.files!.isNotEmpty) {
+      final fileId = list.files!.first.id!;
+      final media = await _driveApi!.files.get(
+        fileId,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+
+      final bytes = await media.stream.expand((e) => e).toList();
+      return utf8.decode(bytes);
+    }
+    return null;
+  }
+
+  Future<void> uploadPhoto(int babyId, Stream<List<int>> stream, int length, String fileName) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+    final folderId = await _getOrCreateBabyFolder(babyId);
+
+    final media = drive.Media(
+      stream,
+      length,
+    );
+
+    final list = await _driveApi!.files.list(
+      q: "name = '$fileName' and '$folderId' in parents and trashed = false",
+      spaces: 'drive',
+    );
+
+    if (list.files != null && list.files!.isNotEmpty) {
+      await _driveApi!.files.update(
+        drive.File(),
+        list.files!.first.id!,
+        uploadMedia: media,
+      );
+    } else {
+      final file = drive.File()
+        ..name = fileName
+        ..parents = [folderId];
+      await _driveApi!.files.create(file, uploadMedia: media);
+    }
+  }
+}
+

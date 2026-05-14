@@ -152,4 +152,18 @@ class SecureStorage {
     if (key == null) throw Exception('Encryption key not found');
     return key;
   }
+
+  Future<void> saveEncryptionKey(String keyBase64) async {
+    const androidOptions = AndroidOptions();
+    await _storage.write(
+      key: 'encryption_key',
+      value: keyBase64,
+      aOptions: androidOptions,
+    );
+    // Re-initialize encrypter with the new key
+    final key = encrypt.Key(base64Decode(keyBase64));
+    _encrypter = encrypt.Encrypter(
+      encrypt.AES(key, mode: encrypt.AESMode.gcm),
+    );
+  }
 }

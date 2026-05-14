@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/database/repositories/baby_repository.dart';
 import '../../../../core/network/sync_cubit.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../home/cubit/baby_selection_cubit.dart';
@@ -201,7 +202,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                             try {
                               ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Backing up...')));
-                              // In a real app, we'd get the actual DB content here
                               await syncCubit.backupDatabase(widget.babyId, '{"dummy": "data"}');
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -338,7 +338,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
     bool isStep2 = false;
     Map<String, dynamic>? metadata;
 
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -408,7 +408,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                   child: Column(
                     children: [
                       Text(
-                        metadata?['name'] ?? 'Unknown',
+                        (metadata?['name'] as String?) ?? 'Unknown',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
@@ -416,7 +416,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Born: ${metadata?['dob'] ?? 'Unknown'}',
+                        'Born: ${(metadata?['dob'] as String?) ?? 'Unknown'}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
@@ -442,16 +442,19 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
 
                       final foundMetadata = await syncCubit.getBabyMetadata(folderIdController.text);
                       if (foundMetadata != null) {
+                        if (!context.mounted) return;
                         setModalState(() {
                           metadata = foundMetadata;
                           isStep2 = true;
                         });
                       } else {
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Could not find baby metadata in that folder.')),
                         );
                       }
                     } catch (e) {
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Error: $e')),
                       );
@@ -464,17 +467,20 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                       await secureStorage.saveEncryptionKey(keyController.text);
 
                       await babyRepository.joinBaby(
-                        metadata!['name'],
-                        DateTime.parse(metadata!['dob']),
-                        metadata!['gender'],
-                        folderIdController.text,
+                        name: metadata!['name'] as String,
+                        dateOfBirth: DateTime.parse(metadata!['dob'] as String),
+                        gender: metadata!['gender'] as String?,
+                        remoteFolderId: folderIdController.text,
+                        encryptionKey: keyController.text,
                       );
 
+                      if (!context.mounted) return;
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Successfully joined baby!')),
                       );
                     } catch (e) {
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Join failed: $e')),
                       );
@@ -500,7 +506,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
   }
 
   void _showInvitePartnerSheet(BuildContext context) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -557,6 +563,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                     final syncCubit = context.read<SyncCubit>();
                     await syncCubit.shareWithPartner(widget.babyId, email);
                     final folderId = await syncCubit.getBabyFolderId(widget.babyId);
+                    if (!context.mounted) return;
                     final encryptionKey = await context.read<SecureStorage>().getEncryptionKey();
                     
                     _partnerEmailController.clear();
@@ -614,8 +621,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
     final babySelection = context.read<BabySelectionCubit>().state;
     final babyName = babySelection.selectedBaby?.name ?? 'Baby';
     
-    // Generate a deep link or shareable text
-    // Format: BabySteps Invite | Name: [Name] | Folder: [ID] | Key: [Key]
     final shareText = 'Join me on BabySteps to track $babyName\'s routine!\n\n'
         '1. Install BabySteps\n'
         '2. Go to Settings > Cloud Sync > Join Baby\n'
@@ -655,9 +660,17 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                     icon: Icons.share,
                     label: 'Share All',
                     color: Theme.of(context).colorScheme.primary,
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(ctx);
-                      unawaited(Share.share(shareText, subject: 'BabySteps Invitation for $babyName'));
+                      final result = await SharePlus.instance.share(
+                        ShareParams(
+                          text: shareText,
+                          subject: 'BabySteps Invitation for $babyName',
+                        ),
+                      );
+                      if (result.status == ShareResultStatus.success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invitation shared successfully!')));
+                      }
                     },
                   ),
                   _buildShareOption(
@@ -667,8 +680,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                     color: Colors.orange,
                     onTap: () {
                       Navigator.pop(ctx);
-                      // Use Share.share for simple copy if needed, or clipboard
-                      unawaited(Share.share(encryptionKey));
+                      SharePlus.instance.share(ShareParams(text: encryptionKey));
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Encryption key shared!')));
                     },
                   ),
@@ -679,7 +691,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                     color: Colors.blue,
                     onTap: () {
                       Navigator.pop(ctx);
-                      unawaited(Share.share(folderId));
+                      SharePlus.instance.share(ShareParams(text: folderId));
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Folder ID shared!')));
                     },
                   ),

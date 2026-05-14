@@ -8,6 +8,7 @@ class BabyModel {
     required this.name,
     required this.dateOfBirth,
     this.gender,
+    this.remoteFolderId,
   });
 
   final int id;
@@ -60,7 +61,15 @@ class BabyRepository {
     ));
   }
 
-  Future<int> joinBaby(String name, DateTime dateOfBirth, String? gender, String remoteFolderId) {
+  Future<int> joinBaby({
+    required String name,
+    required DateTime dateOfBirth,
+    required String? gender,
+    required String remoteFolderId,
+    required String encryptionKey,
+  }) async {
+    // Note: encryptionKey is handled by SecureStorage when saved, 
+    // but here we just need to register the baby profile.
     final encryptedName = _secureStorage.encryptData(name);
     final encryptedDob = _secureStorage.encryptData(dateOfBirth.toIso8601String());
     final encryptedGender = gender != null ? _secureStorage.encryptData(gender) : null;

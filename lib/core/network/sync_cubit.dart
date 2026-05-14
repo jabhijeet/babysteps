@@ -103,6 +103,37 @@ class SyncCubit extends Cubit<SyncState> {
     return await _syncService.getCurrentClientId();
   }
 
+  /// Gets baby metadata from a folder ID.
+  Future<Map<String, dynamic>?> getBabyMetadata(String folderId) async {
+    emit(state.copyWith(isLoading: true, error: null));
+    try {
+      final metadata = await _syncService.getBabyMetadata(folderId);
+      emit(state.copyWith(isLoading: false));
+      return metadata;
+    } catch (e) {
+      emit(state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      ));
+      rethrow;
+    }
+  }
+
+  /// Updates baby metadata on Google Drive.
+  Future<void> updateBabyMetadata(int babyId, Map<String, dynamic> metadata, {String? remoteFolderId}) async {
+    emit(state.copyWith(isLoading: true, error: null));
+    try {
+      await _syncService.updateBabyMetadata(babyId, metadata, remoteFolderId: remoteFolderId);
+      emit(state.copyWith(isLoading: false));
+    } catch (e) {
+      emit(state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      ));
+      rethrow;
+    }
+  }
+
   /// Shares a baby folder with a partner.
   Future<void> shareWithPartner(int babyId, String email) async {
     emit(state.copyWith(isLoading: true, error: null));
@@ -119,10 +150,10 @@ class SyncCubit extends Cubit<SyncState> {
   }
 
   /// Backs up database to Google Drive.
-  Future<void> backupDatabase(int babyId, String dbContent) async {
+  Future<void> backupDatabase(int babyId, String dbContent, {String? remoteFolderId}) async {
     emit(state.copyWith(isLoading: true, error: null));
     try {
-      await _syncService.backupDatabase(babyId, dbContent);
+      await _syncService.backupDatabase(babyId, dbContent, remoteFolderId: remoteFolderId);
       emit(state.copyWith(isLoading: false));
     } catch (e) {
       emit(state.copyWith(
@@ -134,10 +165,10 @@ class SyncCubit extends Cubit<SyncState> {
   }
 
   /// Restores database from Google Drive.
-  Future<String?> restoreDatabase(int babyId) async {
+  Future<String?> restoreDatabase(int babyId, {String? remoteFolderId}) async {
     emit(state.copyWith(isLoading: true, error: null));
     try {
-      final content = await _syncService.restoreDatabase(babyId);
+      final content = await _syncService.restoreDatabase(babyId, remoteFolderId: remoteFolderId);
       emit(state.copyWith(isLoading: false));
       return content;
     } catch (e) {
@@ -150,10 +181,10 @@ class SyncCubit extends Cubit<SyncState> {
   }
 
   /// Uploads a photo to Google Drive.
-  Future<void> uploadPhoto(int babyId, Stream<List<int>> stream, int length, String fileName) async {
+  Future<void> uploadPhoto(int babyId, Stream<List<int>> stream, int length, String fileName, {String? remoteFolderId}) async {
     emit(state.copyWith(isLoading: true, error: null));
     try {
-      await _syncService.uploadPhoto(babyId, stream, length, fileName);
+      await _syncService.uploadPhoto(babyId, stream, length, fileName, remoteFolderId: remoteFolderId);
       emit(state.copyWith(isLoading: false));
     } catch (e) {
       emit(state.copyWith(
@@ -162,5 +193,10 @@ class SyncCubit extends Cubit<SyncState> {
       ));
       rethrow;
     }
+  }
+
+  /// Gets the Google Drive folder ID for a baby.
+  Future<String> getBabyFolderId(int babyId) async {
+    return await _syncService.getBabyFolderId(babyId);
   }
 }

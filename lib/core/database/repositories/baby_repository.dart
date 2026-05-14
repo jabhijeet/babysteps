@@ -14,6 +14,7 @@ class BabyModel {
   final String name;
   final DateTime dateOfBirth;
   final String? gender;
+  final String? remoteFolderId;
 }
 
 class BabyRepository {
@@ -43,6 +44,7 @@ class BabyRepository {
       name: name,
       dateOfBirth: DateTime.parse(dobString),
       gender: gender,
+      remoteFolderId: baby.remoteFolderId,
     );
   }
 
@@ -56,6 +58,25 @@ class BabyRepository {
       encryptedDateOfBirth: encryptedDob,
       encryptedGender: Value(encryptedGender),
     ));
+  }
+
+  Future<int> joinBaby(String name, DateTime dateOfBirth, String? gender, String remoteFolderId) {
+    final encryptedName = _secureStorage.encryptData(name);
+    final encryptedDob = _secureStorage.encryptData(dateOfBirth.toIso8601String());
+    final encryptedGender = gender != null ? _secureStorage.encryptData(gender) : null;
+
+    return _db.into(_db.babies).insert(BabiesCompanion.insert(
+      encryptedName: encryptedName,
+      encryptedDateOfBirth: encryptedDob,
+      encryptedGender: Value(encryptedGender),
+      remoteFolderId: Value(remoteFolderId),
+    ));
+  }
+
+  Future<void> updateRemoteFolderId(int babyId, String folderId) {
+    return (_db.update(_db.babies)..where((t) => t.id.equals(babyId))).write(
+      BabiesCompanion(remoteFolderId: Value(folderId)),
+    );
   }
 
   Future<List<BabyModel>> getAllBabies() async {

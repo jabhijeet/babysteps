@@ -67,9 +67,11 @@ class SyncService with ChangeNotifier {
 
       // In google_sign_in 7.0+, initialize must be called with parameters.
       // Scopes are now requested via authorizeScopes on the account.
+      // On Android, we must use the Web Client ID as serverClientId for Credential Manager to work correctly
+      // when no google-services.json is present.
       await gsi.initialize(
         clientId: isAndroid ? null : clientId,
-        serverClientId: isAndroid ? clientId : null,
+        serverClientId: isAndroid ? Environment.googleOAuthWebClientId : null,
       );
       _isInitialized = true;
     }
@@ -97,7 +99,9 @@ class SyncService with ChangeNotifier {
   Future<GoogleSignInAccount?> signIn() async {
     try {
       final googleSignIn = await _getGoogleSignIn();
-      final account = await googleSignIn.authenticate();
+      final account = await googleSignIn.signIn();
+
+      if (account == null) return null;
 
       final authz = await account.authorizationClient.authorizeScopes(_scopes);
       final client = authz.authClient(scopes: _scopes);
@@ -124,8 +128,12 @@ class SyncService with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> _getOrCreateBabyFolder(int babyId) async {
+  Future<String> _getOrCreateBabyFolder(int babyId, {String? remoteFolderId}) async {
     if (_driveApi == null) throw Exception('Not signed in');
+
+    if (remoteFolderId != null && remoteFolderId.isNotEmpty) {
+      return remoteFolderId;
+    }
 
     final folderName = 'BabySteps_Sync_Baby_$babyId';
     final list = await _driveApi!.files.list(
@@ -161,11 +169,69 @@ class SyncService with ChangeNotifier {
     );
   }
 
-  Future<void> backupDatabase(int babyId, String dbContent) async {
+  Future<Map<String, dynamic>?> getBabyMetadata(String folderId) async {
     if (_driveApi == null) throw Exception('Not signed in');
-    final folderId = await _getOrCreateBabyFolder(babyId);
 
-    final fileName = 'babysteps_backup_$babyId.json';
+    final list = await _driveApi!.files.list(
+      q: "name = 'baby_metadata.json' and '$folderId' in parents and trashed = false",
+      spaces: 'drive',
+    );
+
+    if (list.files != null && list.files!.isNotEmpty) {
+      final fileId = list.files!.first.id!;
+      final media = await _driveApi!.files.get(
+        fileId,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+
+      final bytes = await media.stream.expand((e) => e).toList();
+      return json.decode(utf8.decode(bytes)) as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  Future<void> updateBabyMetadata(int babyId, Map<String, dynamic> metadata, {String? remoteFolderId}) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+    final folderId = await _getOrCreateBabyFolder(babyId, remoteFolderId: remoteFolderId);
+    final fileName = 'baby_metadata.json';
+    final content = json.encode(metadata);
+    final media = drive.Media(
+      Stream.value(utf8.encode(content)),
+      utf8.encode(content).length,
+    );
+
+    final list = await _driveApi!.files.list(
+      q: "name = '$fileName' and '$folderId' in parents and trashed = false",
+      spaces: 'drive',
+    );
+
+    if (list.files != null && list.files!.isNotEmpty) {
+      final fileId = list.files!.first.id!;
+      await _driveApi!.files.update(
+        drive.File(),
+        fileId,
+        uploadMedia: media,
+      );
+    } else {
+      final file = drive.File()
+        ..name = fileName
+        ..parents = [folderId];
+      await _driveApi!.files.create(
+        file,
+        uploadMedia: media,
+      );
+    }
+  }
+
+  Future<String> getBabyFolderId(int babyId, {String? remoteFolderId}) async {
+    return await _getOrCreateBabyFolder(babyId, remoteFolderId: remoteFolderId);
+  }
+
+  Future<void> backupDatabase(int babyId, String dbContent, {String? remoteFolderId}) async {
+    if (_driveApi == null) throw Exception('Not signed in');
+    final folderId = await _getOrCreateBabyFolder(babyId, remoteFolderId: remoteFolderId);
+
+    final fileName = 'babysteps_backup.json'; // Constant name inside the specific folder
     final media = drive.Media(
       Stream.value(utf8.encode(dbContent)),
       utf8.encode(dbContent).length,
@@ -194,10 +260,10 @@ class SyncService with ChangeNotifier {
     }
   }
 
-  Future<String?> restoreDatabase(int babyId) async {
+  Future<String?> restoreDatabase(int babyId, {String? remoteFolderId}) async {
     if (_driveApi == null) throw Exception('Not signed in');
-    final folderId = await _getOrCreateBabyFolder(babyId);
-    final fileName = 'babysteps_backup_$babyId.json';
+    final folderId = await _getOrCreateBabyFolder(babyId, remoteFolderId: remoteFolderId);
+    final fileName = 'babysteps_backup.json';
 
     final list = await _driveApi!.files.list(
       q: "name = '$fileName' and '$folderId' in parents and trashed = false",
@@ -217,9 +283,9 @@ class SyncService with ChangeNotifier {
     return null;
   }
 
-  Future<void> uploadPhoto(int babyId, Stream<List<int>> stream, int length, String fileName) async {
+  Future<void> uploadPhoto(int babyId, Stream<List<int>> stream, int length, String fileName, {String? remoteFolderId}) async {
     if (_driveApi == null) throw Exception('Not signed in');
-    final folderId = await _getOrCreateBabyFolder(babyId);
+    final folderId = await _getOrCreateBabyFolder(babyId, remoteFolderId: remoteFolderId);
 
     final media = drive.Media(
       stream,

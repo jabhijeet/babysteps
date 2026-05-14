@@ -143,4 +143,13 @@ class SecureStorage {
       throw Exception('Migration failed: $e');
     }
   }
+  Future<String> getEncryptionKey() async {
+    const androidOptions = AndroidOptions();
+    final key = await _storage.read(
+      key: 'encryption_key',
+      aOptions: androidOptions,
+    );
+    if (key == null) throw Exception('Encryption key not found');
+    return key;
+  }
 }

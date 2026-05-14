@@ -41,6 +41,23 @@ class BabySelectionCubit extends Cubit<BabySelectionState> {
     await babyRepository.deleteBaby(id);
     await loadBabies();
   }
+
+  Future<void> joinBaby({
+    required String name,
+    required DateTime dateOfBirth,
+    required String? gender,
+    required String remoteFolderId,
+    required String encryptionKey,
+  }) async {
+    await babyRepository.joinBaby(
+      name: name,
+      dateOfBirth: dateOfBirth,
+      gender: gender,
+      remoteFolderId: remoteFolderId,
+      encryptionKey: encryptionKey,
+    );
+    await loadBabies();
+  }
 }
 
 class BabySelectionState {

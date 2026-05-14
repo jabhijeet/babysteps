@@ -6,8 +6,10 @@
 *.swp
 .buildlog/
 .history
-
-
+.agent/
+.idea/
+.vscode/
+.cursor/
 
 # Flutter repo-specific
 /bin/cache/
@@ -55,6 +57,7 @@ unlinked_spec.ds
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
+**/android/keystore.properties
 *.jks
 
 # iOS/XCode related

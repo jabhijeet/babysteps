@@ -54,12 +54,24 @@ class $BabiesTable extends Babies with TableInfo<$BabiesTable, Baby> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _remoteFolderIdMeta = const VerificationMeta(
+    'remoteFolderId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteFolderId = GeneratedColumn<String>(
+    'remote_folder_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
     encryptedName,
     encryptedDateOfBirth,
     encryptedGender,
+    remoteFolderId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -107,6 +119,15 @@ class $BabiesTable extends Babies with TableInfo<$BabiesTable, Baby> {
         ),
       );
     }
+    if (data.containsKey('remote_folder_id')) {
+      context.handle(
+        _remoteFolderIdMeta,
+        remoteFolderId.isAcceptableOrUnknown(
+          data['remote_folder_id']!,
+          _remoteFolderIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -132,6 +153,10 @@ class $BabiesTable extends Babies with TableInfo<$BabiesTable, Baby> {
         DriftSqlType.string,
         data['${effectivePrefix}encrypted_gender'],
       ),
+      remoteFolderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_folder_id'],
+      ),
     );
   }
 
@@ -146,11 +171,13 @@ class Baby extends DataClass implements Insertable<Baby> {
   final String encryptedName;
   final String encryptedDateOfBirth;
   final String? encryptedGender;
+  final String? remoteFolderId;
   const Baby({
     required this.id,
     required this.encryptedName,
     required this.encryptedDateOfBirth,
     this.encryptedGender,
+    this.remoteFolderId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -160,6 +187,9 @@ class Baby extends DataClass implements Insertable<Baby> {
     map['encrypted_date_of_birth'] = Variable<String>(encryptedDateOfBirth);
     if (!nullToAbsent || encryptedGender != null) {
       map['encrypted_gender'] = Variable<String>(encryptedGender);
+    }
+    if (!nullToAbsent || remoteFolderId != null) {
+      map['remote_folder_id'] = Variable<String>(remoteFolderId);
     }
     return map;
   }
@@ -172,6 +202,9 @@ class Baby extends DataClass implements Insertable<Baby> {
       encryptedGender: encryptedGender == null && nullToAbsent
           ? const Value.absent()
           : Value(encryptedGender),
+      remoteFolderId: remoteFolderId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteFolderId),
     );
   }
 
@@ -187,6 +220,7 @@ class Baby extends DataClass implements Insertable<Baby> {
         json['encryptedDateOfBirth'],
       ),
       encryptedGender: serializer.fromJson<String?>(json['encryptedGender']),
+      remoteFolderId: serializer.fromJson<String?>(json['remoteFolderId']),
     );
   }
   @override
@@ -197,6 +231,7 @@ class Baby extends DataClass implements Insertable<Baby> {
       'encryptedName': serializer.toJson<String>(encryptedName),
       'encryptedDateOfBirth': serializer.toJson<String>(encryptedDateOfBirth),
       'encryptedGender': serializer.toJson<String?>(encryptedGender),
+      'remoteFolderId': serializer.toJson<String?>(remoteFolderId),
     };
   }
 
@@ -205,6 +240,7 @@ class Baby extends DataClass implements Insertable<Baby> {
     String? encryptedName,
     String? encryptedDateOfBirth,
     Value<String?> encryptedGender = const Value.absent(),
+    Value<String?> remoteFolderId = const Value.absent(),
   }) => Baby(
     id: id ?? this.id,
     encryptedName: encryptedName ?? this.encryptedName,
@@ -212,6 +248,9 @@ class Baby extends DataClass implements Insertable<Baby> {
     encryptedGender: encryptedGender.present
         ? encryptedGender.value
         : this.encryptedGender,
+    remoteFolderId: remoteFolderId.present
+        ? remoteFolderId.value
+        : this.remoteFolderId,
   );
   Baby copyWithCompanion(BabiesCompanion data) {
     return Baby(
@@ -225,6 +264,9 @@ class Baby extends DataClass implements Insertable<Baby> {
       encryptedGender: data.encryptedGender.present
           ? data.encryptedGender.value
           : this.encryptedGender,
+      remoteFolderId: data.remoteFolderId.present
+          ? data.remoteFolderId.value
+          : this.remoteFolderId,
     );
   }
 
@@ -234,14 +276,20 @@ class Baby extends DataClass implements Insertable<Baby> {
           ..write('id: $id, ')
           ..write('encryptedName: $encryptedName, ')
           ..write('encryptedDateOfBirth: $encryptedDateOfBirth, ')
-          ..write('encryptedGender: $encryptedGender')
+          ..write('encryptedGender: $encryptedGender, ')
+          ..write('remoteFolderId: $remoteFolderId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, encryptedName, encryptedDateOfBirth, encryptedGender);
+  int get hashCode => Object.hash(
+    id,
+    encryptedName,
+    encryptedDateOfBirth,
+    encryptedGender,
+    remoteFolderId,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -249,7 +297,8 @@ class Baby extends DataClass implements Insertable<Baby> {
           other.id == this.id &&
           other.encryptedName == this.encryptedName &&
           other.encryptedDateOfBirth == this.encryptedDateOfBirth &&
-          other.encryptedGender == this.encryptedGender);
+          other.encryptedGender == this.encryptedGender &&
+          other.remoteFolderId == this.remoteFolderId);
 }
 
 class BabiesCompanion extends UpdateCompanion<Baby> {
@@ -257,17 +306,20 @@ class BabiesCompanion extends UpdateCompanion<Baby> {
   final Value<String> encryptedName;
   final Value<String> encryptedDateOfBirth;
   final Value<String?> encryptedGender;
+  final Value<String?> remoteFolderId;
   const BabiesCompanion({
     this.id = const Value.absent(),
     this.encryptedName = const Value.absent(),
     this.encryptedDateOfBirth = const Value.absent(),
     this.encryptedGender = const Value.absent(),
+    this.remoteFolderId = const Value.absent(),
   });
   BabiesCompanion.insert({
     this.id = const Value.absent(),
     required String encryptedName,
     required String encryptedDateOfBirth,
     this.encryptedGender = const Value.absent(),
+    this.remoteFolderId = const Value.absent(),
   }) : encryptedName = Value(encryptedName),
        encryptedDateOfBirth = Value(encryptedDateOfBirth);
   static Insertable<Baby> custom({
@@ -275,6 +327,7 @@ class BabiesCompanion extends UpdateCompanion<Baby> {
     Expression<String>? encryptedName,
     Expression<String>? encryptedDateOfBirth,
     Expression<String>? encryptedGender,
+    Expression<String>? remoteFolderId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -282,6 +335,7 @@ class BabiesCompanion extends UpdateCompanion<Baby> {
       if (encryptedDateOfBirth != null)
         'encrypted_date_of_birth': encryptedDateOfBirth,
       if (encryptedGender != null) 'encrypted_gender': encryptedGender,
+      if (remoteFolderId != null) 'remote_folder_id': remoteFolderId,
     });
   }
 
@@ -290,12 +344,14 @@ class BabiesCompanion extends UpdateCompanion<Baby> {
     Value<String>? encryptedName,
     Value<String>? encryptedDateOfBirth,
     Value<String?>? encryptedGender,
+    Value<String?>? remoteFolderId,
   }) {
     return BabiesCompanion(
       id: id ?? this.id,
       encryptedName: encryptedName ?? this.encryptedName,
       encryptedDateOfBirth: encryptedDateOfBirth ?? this.encryptedDateOfBirth,
       encryptedGender: encryptedGender ?? this.encryptedGender,
+      remoteFolderId: remoteFolderId ?? this.remoteFolderId,
     );
   }
 
@@ -316,6 +372,9 @@ class BabiesCompanion extends UpdateCompanion<Baby> {
     if (encryptedGender.present) {
       map['encrypted_gender'] = Variable<String>(encryptedGender.value);
     }
+    if (remoteFolderId.present) {
+      map['remote_folder_id'] = Variable<String>(remoteFolderId.value);
+    }
     return map;
   }
 
@@ -325,7 +384,8 @@ class BabiesCompanion extends UpdateCompanion<Baby> {
           ..write('id: $id, ')
           ..write('encryptedName: $encryptedName, ')
           ..write('encryptedDateOfBirth: $encryptedDateOfBirth, ')
-          ..write('encryptedGender: $encryptedGender')
+          ..write('encryptedGender: $encryptedGender, ')
+          ..write('remoteFolderId: $remoteFolderId')
           ..write(')'))
         .toString();
   }
@@ -3622,6 +3682,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_feed_baby_time',
     'CREATE INDEX idx_feed_baby_time ON feeding_logs (baby_id, start_time)',
   );
+  late final Index idxFeedType = Index(
+    'idx_feed_type',
+    'CREATE INDEX idx_feed_type ON feeding_logs (type)',
+  );
   late final Index idxSleepBabyTime = Index(
     'idx_sleep_baby_time',
     'CREATE INDEX idx_sleep_baby_time ON sleep_logs (baby_id, start_time)',
@@ -3629,6 +3693,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index idxDiaperBabyTime = Index(
     'idx_diaper_baby_time',
     'CREATE INDEX idx_diaper_baby_time ON diaper_logs (baby_id, start_time)',
+  );
+  late final Index idxDiaperType = Index(
+    'idx_diaper_type',
+    'CREATE INDEX idx_diaper_type ON diaper_logs (type)',
   );
   late final Index idxGrowthBabyTime = Index(
     'idx_growth_baby_time',
@@ -3638,9 +3706,17 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_activity_baby_time',
     'CREATE INDEX idx_activity_baby_time ON activity_logs (baby_id, start_time)',
   );
+  late final Index idxActivityType = Index(
+    'idx_activity_type',
+    'CREATE INDEX idx_activity_type ON activity_logs (type)',
+  );
   late final Index idxMedicalBabyTime = Index(
     'idx_medical_baby_time',
     'CREATE INDEX idx_medical_baby_time ON medical_logs (baby_id, start_time)',
+  );
+  late final Index idxMedicalType = Index(
+    'idx_medical_type',
+    'CREATE INDEX idx_medical_type ON medical_logs (type)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -3655,11 +3731,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     activityLogs,
     medicalLogs,
     idxFeedBabyTime,
+    idxFeedType,
     idxSleepBabyTime,
     idxDiaperBabyTime,
+    idxDiaperType,
     idxGrowthBabyTime,
     idxActivityBabyTime,
+    idxActivityType,
     idxMedicalBabyTime,
+    idxMedicalType,
   ];
 }
 
@@ -3669,6 +3749,7 @@ typedef $$BabiesTableCreateCompanionBuilder =
       required String encryptedName,
       required String encryptedDateOfBirth,
       Value<String?> encryptedGender,
+      Value<String?> remoteFolderId,
     });
 typedef $$BabiesTableUpdateCompanionBuilder =
     BabiesCompanion Function({
@@ -3676,6 +3757,7 @@ typedef $$BabiesTableUpdateCompanionBuilder =
       Value<String> encryptedName,
       Value<String> encryptedDateOfBirth,
       Value<String?> encryptedGender,
+      Value<String?> remoteFolderId,
     });
 
 final class $$BabiesTableReferences
@@ -3817,6 +3899,11 @@ class $$BabiesTableFilterComposer
 
   ColumnFilters<String> get encryptedGender => $composableBuilder(
     column: $table.encryptedGender,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteFolderId => $composableBuilder(
+    column: $table.remoteFolderId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3999,6 +4086,11 @@ class $$BabiesTableOrderingComposer
     column: $table.encryptedGender,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get remoteFolderId => $composableBuilder(
+    column: $table.remoteFolderId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$BabiesTableAnnotationComposer
@@ -4025,6 +4117,11 @@ class $$BabiesTableAnnotationComposer
 
   GeneratedColumn<String> get encryptedGender => $composableBuilder(
     column: $table.encryptedGender,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remoteFolderId => $composableBuilder(
+    column: $table.remoteFolderId,
     builder: (column) => column,
   );
 
@@ -4218,11 +4315,13 @@ class $$BabiesTableTableManager
                 Value<String> encryptedName = const Value.absent(),
                 Value<String> encryptedDateOfBirth = const Value.absent(),
                 Value<String?> encryptedGender = const Value.absent(),
+                Value<String?> remoteFolderId = const Value.absent(),
               }) => BabiesCompanion(
                 id: id,
                 encryptedName: encryptedName,
                 encryptedDateOfBirth: encryptedDateOfBirth,
                 encryptedGender: encryptedGender,
+                remoteFolderId: remoteFolderId,
               ),
           createCompanionCallback:
               ({
@@ -4230,11 +4329,13 @@ class $$BabiesTableTableManager
                 required String encryptedName,
                 required String encryptedDateOfBirth,
                 Value<String?> encryptedGender = const Value.absent(),
+                Value<String?> remoteFolderId = const Value.absent(),
               }) => BabiesCompanion.insert(
                 id: id,
                 encryptedName: encryptedName,
                 encryptedDateOfBirth: encryptedDateOfBirth,
                 encryptedGender: encryptedGender,
+                remoteFolderId: remoteFolderId,
               ),
           withReferenceMapper: (p0) => p0
               .map(

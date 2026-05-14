@@ -32,6 +32,7 @@ class BabyStepsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
+        RepositoryProvider<SecureStorage>.value(value: secureStorage),
         RepositoryProvider<NotificationService>(
           create: (_) => NotificationService()..init(),
         ),
